@@ -170,17 +170,39 @@ def simulate_action():
         conn.close()
         return jsonify({"error": "Employee not found"}), 404
 
+    # 403 Lockout check
+    # Check if employee is flagged or score >= 100
+    # Bypass check if it is a simulator resetting to a baseline score (< 100)
+    is_reset = is_simulator and simulation_score is not None and simulation_score < 100
+    if (employee['status'] == 'Flagged' or employee['risk_score'] >= 100) and not is_reset:
+        conn.close()
+        return jsonify({
+            "success": False,
+            "message": "Employee account locked due to critical insider threat."
+        }), 403
+
     prev_score = employee['risk_score']
 
     # AI Threat Engine Risk Logic
     points_to_add = 0
     
-    # 1. Location
-    if location != 'Office':
+    # 1. Location points
+    if location == 'Remote VPN':
+        points_to_add += 10
+    elif location == 'Unknown Location':
         points_to_add += 30
+    elif location in ['Chennai Head Office', 'Bangalore Branch', 'Mumbai Branch', 'Hyderabad Branch', 'Office']:
+        points_to_add += 0
+    else:
+        # Fallback for simulator locations or custom strings
+        if 'VPN' in location or 'Tor' in location or 'Remote' in location:
+            points_to_add += 10
+        elif 'Unknown' in location:
+            points_to_add += 30
+        else:
+            points_to_add += 0
         
     # 2. Timing (Late night check)
-    # Check if late night is requested or simulated
     is_late_night = data.get('is_late_night', False)
     if is_late_night:
         points_to_add += 20
@@ -207,8 +229,7 @@ def simulate_action():
     elif activity == "Export Excel Report":
         points_to_add += 15
     elif activity == "Login":
-        if location == 'Office':
-            points_to_add = 0
+        points_to_add = 0
     elif activity == "Logout":
         points_to_add = 0
 
@@ -223,12 +244,46 @@ def simulate_action():
     threat_level = get_risk_level(new_score)
     timestamp_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
+    # Location to IP mapping update
+    loc_ip_map = {
+        'Chennai Head Office': '10.10.20.14',
+        'Bangalore Branch': '10.10.30.22',
+        'Mumbai Branch': '10.10.40.45',
+        'Hyderabad Branch': '10.10.50.12',
+        'Remote VPN': '172.16.8.102',
+        'Unknown Location': '198.51.100.74'
+    }
+    ip_address = loc_ip_map.get(location, employee['ip_address'] or '10.10.20.14')
+
+    # Update last login time
+    last_login = employee['last_login']
+    if activity == "Login":
+        last_login = timestamp_str
+
+    # Update Lock metadata if flagged/locked
+    new_status = 'Flagged' if new_score >= 60 else 'Active'
+    lock_reason = employee['lock_reason']
+    lock_time = employee['lock_time']
+    if new_status == 'Flagged' or new_score >= 100:
+        if not lock_reason:
+            lock_time = timestamp_str
+            lock_reason = f"Threat score of {new_score}/100 reached via '{activity}' activity."
+            if activity == "USB Device Connected":
+                lock_reason = "Unverified USB mass storage device connected."
+            elif activity == "Failed Login":
+                lock_reason = "Multiple consecutive authentication failures detected."
+            elif activity == "Download Customer Data" and data.get('records_count', 0) > 500:
+                lock_reason = f"Mass data extraction: Downloaded {data.get('records_count')} records."
+            elif activity == "Change Permissions" or activity == "Privilege Escalation":
+                lock_reason = "Unauthorized permission escalation attempt."
+
     # Update Employee
     conn.execute("""
         UPDATE employees 
-        SET risk_score = ?, last_activity = ?, last_location = ?, status = ?
+        SET risk_score = ?, last_activity = ?, last_location = ?, status = ?, 
+            ip_address = ?, lock_reason = ?, lock_time = ?, last_login = ?
         WHERE id = ?
-    """, (new_score, activity, location, 'Flagged' if new_score >= 60 else 'Active', employee_id))
+    """, (new_score, activity, location, new_status, ip_address, lock_reason, lock_time, last_login, employee_id))
 
     # Insert Activity Log
     conn.execute("""
@@ -271,6 +326,28 @@ def simulate_action():
         "threat_level": threat_level,
         "points_added": points_added
     })
+
+@app.route('/api/employees/unlock/<int:employee_id>', methods=['POST'])
+def unlock_employee(employee_id):
+    try:
+        conn = get_db_connection()
+        conn.execute("""
+            UPDATE employees 
+            SET status = 'Active', risk_score = 0, lock_reason = NULL, lock_time = NULL 
+            WHERE id = ?
+        """, (employee_id,))
+        
+        timestamp_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        conn.execute("""
+            INSERT INTO activity_logs (employee_id, activity, details, location, timestamp, risk_score_added, risk_score_after, risk_level)
+            VALUES (?, 'Account Unlocked', 'Security Admin manually unlocked the account.', 'Security Control Center', ?, 0, 0, 'Low')
+        """, (employee_id, timestamp_str))
+        
+        conn.commit()
+        conn.close()
+        return jsonify({"success": True, "message": "Employee successfully unlocked."})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/reset', methods=['POST'])
 def reset_system():

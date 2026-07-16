@@ -3,7 +3,7 @@ import { jsPDF } from 'jspdf';
 import { 
   ShieldAlert, Activity, Users, AlertTriangle, Download, 
   Check, FileText, FilterX, HelpCircle, ShieldAlert as AlertIcon,
-  RefreshCw, TrendingUp
+  RefreshCw, TrendingUp, Lock
 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -19,7 +19,8 @@ const AdminDashboard = ({
   incidents, 
   onResolveAlert, 
   onUpdateIncidentStatus,
-  onResetDb
+  onResetDb,
+  onUnlockEmployee
 }) => {
   const [selectedEmployeeId, setSelectedEmployeeId] = useState(null);
   const [activeTab, setActiveTab] = useState('overview'); // overview, alerts, incidents, employees
@@ -356,13 +357,34 @@ const AdminDashboard = ({
             </div>
           </div>
 
-          <div className="mt-6 text-center">
-            <span className={`px-4 py-1.5 rounded-full text-xs font-mono font-bold border ${getRiskClass(activeRiskScore)}`}>
-              Threat Level: {getRiskLabel(activeRiskScore)}
-            </span>
-            <p className="text-gray-500 text-[10px] mt-4 font-mono">
-              Dynamically derived from anomalies, location shifts, off-hours execution, and volume profiles.
-            </p>
+          <div className="mt-6 text-center w-full">
+            {mainEmployee && (mainEmployee.status === 'Flagged' || mainEmployee.risk_score >= 100) ? (
+              <div className="space-y-3">
+                <div className="px-4 py-1.5 rounded-full text-xs font-mono font-bold border text-cyber-danger border-cyber-danger bg-cyber-danger/10 animate-pulse flex items-center justify-center gap-1.5">
+                  <AlertTriangle className="h-3.5 w-3.5" /> OPERATOR LOCKED OUT
+                </div>
+                <div className="bg-black/30 border border-cyber-danger/20 p-2.5 rounded text-[10px] text-gray-400 text-left space-y-1 font-mono">
+                  <p><span className="text-gray-500">Lock Time:</span> {mainEmployee.lock_time || 'N/A'}</p>
+                  <p><span className="text-gray-500">IP / Loc:</span> {mainEmployee.ip_address} ({mainEmployee.last_location})</p>
+                  <p className="line-clamp-2"><span className="text-gray-500">Reason:</span> {mainEmployee.lock_reason || 'Insider threat baseline exceeded.'}</p>
+                </div>
+                <button 
+                  onClick={() => onUnlockEmployee(mainEmployee.id)}
+                  className="w-full py-1.5 bg-cyber-success hover:bg-cyber-success/80 text-cyber-bg font-extrabold rounded text-[10px] tracking-wider transition-all"
+                >
+                  UNLOCK OPERATOR
+                </button>
+              </div>
+            ) : (
+              <>
+                <span className={`px-4 py-1.5 rounded-full text-xs font-mono font-bold border ${getRiskClass(activeRiskScore)}`}>
+                  Threat Level: {getRiskLabel(activeRiskScore)}
+                </span>
+                <p className="text-gray-500 text-[10px] mt-4 font-mono">
+                  Dynamically derived from anomalies, location shifts, off-hours execution, and volume profiles.
+                </p>
+              </>
+            )}
           </div>
         </div>
 
@@ -711,6 +733,51 @@ const AdminDashboard = ({
         {/* Tab 4: Employee Directory list */}
         {activeTab === 'employees' && (
           <div className="space-y-4 pt-2 font-mono">
+            {/* Locked Operators Alert Section */}
+            {employees.some(emp => emp.status === 'Flagged' || emp.risk_score >= 100) && (
+              <div className="border border-cyber-danger bg-cyber-danger/5 rounded-lg p-4 space-y-4 mb-4">
+                <div className="flex items-center gap-2 border-b border-cyber-danger/20 pb-2 text-cyber-danger font-bold text-xs uppercase tracking-wider">
+                  <ShieldAlert className="h-4.5 w-4.5 animate-pulse" />
+                  <span>Critical Lockout Alerts: Action Required ({employees.filter(emp => emp.status === 'Flagged' || emp.risk_score >= 100).length})</span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {employees.filter(emp => emp.status === 'Flagged' || emp.risk_score >= 100).map(emp => (
+                    <div key={emp.id} className="bg-black/40 border border-cyber-danger/30 rounded p-3 text-xs space-y-2 relative font-mono">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <p className="text-gray-100 font-extrabold text-sm">{emp.name}</p>
+                          <p className="text-gray-500 text-[10px]">ID: {emp.employee_id} | {emp.role} ({emp.department})</p>
+                        </div>
+                        <span className="bg-cyber-danger/20 text-cyber-danger border border-cyber-danger/40 px-2 py-0.5 rounded font-black text-[10px]">
+                          {emp.risk_score}/100 RISK
+                        </span>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[10px] border-t border-cyber-border/20 pt-2 text-gray-400">
+                        <p><span className="text-gray-500">Location:</span> {emp.last_location}</p>
+                        <p><span className="text-gray-500">IP Address:</span> {emp.ip_address}</p>
+                        <p><span className="text-gray-500">Time Locked:</span> {emp.lock_time || 'N/A'}</p>
+                        <p><span className="text-gray-500">Device/OS:</span> {emp.device_name} ({emp.operating_system})</p>
+                      </div>
+
+                      <div className="bg-cyber-danger/10 border-l border-cyber-danger p-2 text-gray-300 italic text-[10px]">
+                        <strong className="text-cyber-danger uppercase font-bold">Lockout Reason:</strong> {emp.lock_reason || "Critical Insider Threat metrics breached."}
+                      </div>
+
+                      <div className="flex justify-end pt-1">
+                        <button 
+                          onClick={() => onUnlockEmployee(emp.id)}
+                          className="px-3 py-1 bg-cyber-success hover:bg-cyber-success/80 text-cyber-bg font-extrabold rounded text-[10px] tracking-wider transition-all shadow-[0_0_10px_rgba(34,197,94,0.1)]"
+                        >
+                          UNLOCK OPERATOR
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="overflow-x-auto border border-cyber-border rounded">
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
@@ -725,34 +792,50 @@ const AdminDashboard = ({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-cyber-border/40">
-                  {filteredEmployees.map(emp => (
-                    <tr key={emp.id} className="hover:bg-cyber-bg/40">
-                      <td className="p-3 font-semibold text-gray-200">{emp.name}</td>
-                      <td className="p-3 text-gray-400">{emp.department}</td>
-                      <td className="p-3 text-gray-400">{emp.role}</td>
-                      <td className="p-3">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                          emp.status === 'Active' 
-                            ? 'text-cyber-success bg-cyber-success/10 border border-cyber-success/20' 
-                            : 'text-cyber-warning bg-cyber-warning/10 border border-cyber-warning/20'
-                        }`}>
-                          {emp.status}
-                        </span>
-                      </td>
-                      <td className="p-3 font-bold text-sm" style={{ color: getRiskColor(emp.risk_score) }}>
-                        {emp.risk_score}
-                      </td>
-                      <td className="p-3 text-gray-500 max-w-[200px] truncate">{emp.last_activity || 'N/A'}</td>
-                      <td className="p-3 text-right">
-                        <button 
-                          onClick={() => setSelectedEmployeeId(emp.id)}
-                          className="px-2.5 py-1 bg-cyber-primary/10 hover:bg-cyber-primary/30 border border-cyber-primary/30 text-cyber-primary rounded text-[10px] transition-all font-semibold"
-                        >
-                          Analyse Telemetry
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {filteredEmployees.map(emp => {
+                    const isLocked = emp.status === 'Flagged' || emp.risk_score >= 100;
+                    return (
+                      <tr key={emp.id} className="hover:bg-cyber-bg/40">
+                        <td className="p-3 font-semibold text-gray-200">
+                          <div className="flex items-center gap-1.5">
+                            {isLocked && <Lock className="h-3.5 w-3.5 text-cyber-danger animate-pulse" />}
+                            <span>{emp.name}</span>
+                          </div>
+                        </td>
+                        <td className="p-3 text-gray-400">{emp.department}</td>
+                        <td className="p-3 text-gray-400">{emp.role}</td>
+                        <td className="p-3">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                            isLocked 
+                              ? 'text-cyber-danger bg-cyber-danger/10 border border-cyber-danger/25' 
+                              : 'text-cyber-success bg-cyber-success/10 border border-cyber-success/20'
+                          }`}>
+                            {isLocked ? 'Locked / Flagged' : emp.status}
+                          </span>
+                        </td>
+                        <td className="p-3 font-bold text-sm" style={{ color: getRiskColor(emp.risk_score) }}>
+                          {emp.risk_score}
+                        </td>
+                        <td className="p-3 text-gray-500 max-w-[200px] truncate">{emp.last_activity || 'N/A'}</td>
+                        <td className="p-3 text-right space-x-2">
+                          <button 
+                            onClick={() => setSelectedEmployeeId(emp.id)}
+                            className="px-2.5 py-1 bg-cyber-primary/10 hover:bg-cyber-primary/30 border border-cyber-primary/30 text-cyber-primary rounded text-[10px] transition-all font-semibold"
+                          >
+                            Analyse Telemetry
+                          </button>
+                          {isLocked && (
+                            <button 
+                              onClick={() => onUnlockEmployee(emp.id)}
+                              className="px-2.5 py-1 bg-cyber-success hover:bg-cyber-success/80 border-transparent text-cyber-bg rounded text-[10px] font-bold transition-all"
+                            >
+                              Unlock Operator
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

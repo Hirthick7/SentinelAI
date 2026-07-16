@@ -82,6 +82,23 @@ function App() {
     }
   };
 
+  const handleUnlockEmployee = async (employeeId) => {
+    try {
+      const res = await fetch(`/api/employees/unlock/${employeeId}`, {
+        method: 'POST'
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert("Employee account successfully unlocked.");
+        fetchDashboardData();
+      } else {
+        alert(data.error || "Failed to unlock employee.");
+      }
+    } catch (e) {
+      alert("Failed to connect to API server.");
+    }
+  };
+
   const handleResetDb = async () => {
     if (!window.confirm("Are you sure you want to restore the threat database back to baseline stats?")) {
       return;
@@ -177,6 +194,7 @@ function App() {
             
             <EmployeeDashboard 
               employees={employees.filter(e => e.role !== 'Security Admin')} 
+              logs={logs}
               onActionSuccess={fetchDashboardData} 
             />
           </div>
@@ -217,6 +235,7 @@ function App() {
                 onResolveAlert={handleResolveAlert}
                 onUpdateIncidentStatus={handleUpdateIncidentStatus}
                 onResetDb={handleResetDb}
+                onUnlockEmployee={handleUnlockEmployee}
               />
             </div>
 

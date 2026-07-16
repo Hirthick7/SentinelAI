@@ -25,13 +25,20 @@ def init_db():
     cursor.execute("""
     CREATE TABLE employees (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        employee_id TEXT NOT NULL UNIQUE,
         name TEXT NOT NULL,
         department TEXT NOT NULL,
         role TEXT NOT NULL,
         risk_score INTEGER DEFAULT 0,
         status TEXT DEFAULT 'Active',
         last_activity TEXT,
-        last_location TEXT DEFAULT 'Office'
+        last_location TEXT DEFAULT 'Office',
+        ip_address TEXT,
+        device_name TEXT,
+        operating_system TEXT,
+        lock_reason TEXT,
+        lock_time TEXT,
+        last_login TEXT
     )
     """)
 
@@ -83,19 +90,19 @@ def init_db():
 
     # Seed Employees
     employees = [
-        ("John Doe", "IT Support", "Employee", 10, "Active", "View Customer Records", "Office"),
-        ("Sarah Jenkins", "Wealth Management", "Employee", 25, "Active", "Office Login", "Office"),
-        ("Michael Chen", "Commercial Banking", "Employee", 15, "Active", "Export Excel Report", "Office"),
-        ("Elena Rostova", "Treasury & FX", "Employee", 5, "Active", "Office Login", "Office"),
-        ("Marcus Brody", "Retail Banking", "Employee", 45, "Flagged", "USB Device Connected", "Office"),
-        ("Alice Cyber", "Cybersecurity", "Security Admin", 0, "Active", "System Monitor", "Office")
+        ("EMP-1001", "John Doe", "IT Support", "Employee", 10, "Active", "View Customer Records", "Chennai Head Office", "10.10.20.14", "SEC-TERM-2026", "Windows 11 Enterprise"),
+        ("EMP-1002", "Sarah Jenkins", "Wealth Management", "Employee", 25, "Active", "Office Login", "Bangalore Branch", "10.10.30.22", "SEC-TERM-2027", "Windows 11 Enterprise"),
+        ("EMP-1003", "Michael Chen", "Commercial Banking", "Employee", 15, "Active", "Export Excel Report", "Mumbai Branch", "10.10.40.45", "SEC-TERM-2028", "macOS Sequoia"),
+        ("EMP-1004", "Elena Rostova", "Treasury & FX", "Employee", 5, "Active", "Office Login", "Hyderabad Branch", "10.10.50.12", "SEC-TERM-2029", "RHEL 9.4 Workstation"),
+        ("EMP-1005", "Marcus Brody", "Retail Banking", "Employee", 45, "Flagged", "USB Device Connected", "Remote VPN", "172.16.8.102", "SEC-TERM-2030", "Windows 11 Pro"),
+        ("EMP-1006", "Alice Cyber", "Cybersecurity", "Security Admin", 0, "Active", "System Monitor", "Chennai Head Office", "10.10.20.2", "SEC-TERM-2031", "Windows 11 Enterprise")
     ]
 
-    for name, dept, role, risk, status, last_act, last_loc in employees:
+    for emp_id, name, dept, role, risk, status, last_act, last_loc, ip, dev, os in employees:
         cursor.execute("""
-        INSERT INTO employees (name, department, role, risk_score, status, last_activity, last_location)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (name, dept, role, risk, status, last_act, last_loc))
+        INSERT INTO employees (employee_id, name, department, role, risk_score, status, last_activity, last_location, ip_address, device_name, operating_system)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (emp_id, name, dept, role, risk, status, last_act, last_loc, ip, dev, os))
     
     conn.commit()
 
